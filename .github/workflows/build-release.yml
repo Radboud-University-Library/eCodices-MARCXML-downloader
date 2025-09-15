@@ -1,9 +1,13 @@
 name: Build Windows EXE and attach to Release
 
+# Allow this workflow to create/update Releases
+permissions:
+  contents: write
+
 on:
   push:
-    tags: ["v*"]        # auto-builds on new tags like v1.0.1
-  workflow_dispatch:     # lets you build for an existing tag (e.g. v1.0.0)
+    tags: ["v*"]        # only runs on tag pushes like v1.0.1
+  workflow_dispatch:     # manual run for an existing tag (e.g. v1.0.0)
     inputs:
       tag:
         description: "Tag to build (e.g. v1.0.0)"
@@ -17,6 +21,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          # If manually triggered, build the specified tag; else build the pushed tag
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - uses: actions/setup-python@v5
@@ -38,7 +43,7 @@ jobs:
           if exist requirements.txt pip install -r requirements.txt
           pip install "pyinstaller>=6.6" "pyinstaller-hooks-contrib>=2024.8"
 
-      - name: Build exe with PyInstaller
+      - name: Build exe with PyInstaller (no console window)
         run: pyinstaller --noconfirm --onefile --windowed --name ecodices_marcxml_downloader app.py
 
       - name: Package artifact
@@ -53,6 +58,8 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    # Safety: only attempt release on manual run or tag-ref
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -64,5 +71,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # Use the input tag for manual runs; otherwise the tag that triggered the workflow
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           files: ecodices_marcxml_downloader-win64.zip
