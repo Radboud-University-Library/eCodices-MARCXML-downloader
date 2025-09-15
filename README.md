@@ -15,7 +15,7 @@ De Ecodices MARC Downloader is ontworpen om bibliotheken en andere instellingen 
 
 ### Vereisten
 
-- Python 3.7 of hoger (getest tot Python 3.12)
+- Python 3.7 of hoger
 - Tkinter
 - Bookops-WorldCat
 - Requests
@@ -24,8 +24,8 @@ De Ecodices MARC Downloader is ontworpen om bibliotheken en andere instellingen 
 
 1. Clone deze repository of download de ZIP en pak deze uit
    ```
-   git clone https://github.com/yourusername/ecodices-marc-downloader.git
-   cd ecodices-marc-downloader
+   git clone https://github.com/Radboud-University-Library/eCodices-MARCXML-downloader.git
+   cd eCodices-MARCXML-downloader
    ```
 
 2. Maak een virtuele omgeving aan (optioneel maar aanbevolen)
