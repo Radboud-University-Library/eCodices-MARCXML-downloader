@@ -20,7 +20,6 @@ from requests import HTTPError
 
 APP_NAME = "Ecodices MARC Downloader"
 DEFAULT_SCOPE = "WorldCatMetadataAPI"
-DEFAULT_TIMEOUT = 15  # seconds
 
 # Retry/session behavior; compatible with requests/urllib3 naming
 SESSION_CONFIG = {
@@ -35,7 +34,8 @@ SESSION_CONFIG = {
 
 def normalize_ocn(s: str) -> str:
     """
-    Try to reduce an OCN to digits only.
+    Normalizes an OCLC Control Number (OCN) by stripping non-digit characters.
+
     Examples:
         '(OCoLC) 12345678' -> '12345678'
         ' 00123456 '       -> '00123456' (leading zeros preserved)
@@ -47,7 +47,7 @@ def normalize_ocn(s: str) -> str:
 
 
 def unique(seq: Iterable[str]) -> List[str]:
-    """Return a list of unique values preserving order."""
+    """Returns a list of unique, non-empty strings from an iterable, preserving original order."""
     seen = set()
     out = []
     for x in seq:
@@ -75,7 +75,6 @@ class Worker(threading.Thread):
             progress_cb,
             stop_event,
             delay_ms=0,
-            timeout_s=DEFAULT_TIMEOUT,
     ):
         super().__init__(daemon=True)
         self.ocns = ocns
@@ -88,27 +87,32 @@ class Worker(threading.Thread):
         self.stop_event = stop_event
         self.errors = []
         self.delay_ms = delay_ms
-        self.timeout_s = timeout_s
 
         # Local log buffer so we don't fight the GUI's queue consumer
         self._log_buffer = []
 
     def log(self, msg: str):
-        """Add message to log with timestamp."""
+        """Logs a message to the GUI and an internal buffer, with a timestamp."""
         stamp = datetime.now().strftime("%H:%M:%S")
         line = f"[{stamp}] {msg}"
         self._log_buffer.append(line)
         self.log_q.put(line)
 
     def fetch_marcxml(self, ocn: str, session: MetadataSession) -> str:
-        """Fetch MARCXML for a given OCN."""
-        try:
-            # Try with timeout parameter first
-            r = session.bib_get(ocn, timeout=self.timeout_s)
-        except TypeError:
-            # If timeout is not supported, fall back to default timeout
-            r = session.bib_get(ocn)
-            
+        """
+        Fetches the MARCXML record for a given OCN.
+
+        Args:
+            ocn: The OCLC Control Number.
+            session: The MetadataSession to use for the request.
+
+        Returns:
+            The MARCXML record as a string.
+
+        Raises:
+            HTTPError: If the request fails.
+        """
+        r = session.bib_get(ocn)
         try:
             r.raise_for_status()
         except HTTPError as e:
@@ -116,7 +120,7 @@ class Worker(threading.Thread):
         return r.content.decode("utf-8", errors="replace")
 
     def run(self):
-        """Main worker process to fetch and save MARC records."""
+        """The main entry point for the worker thread. Handles authentication, session creation, and processing of OCNs."""
         records_dir = self.out_dir / "records"
         records_dir.mkdir(parents=True, exist_ok=True)
         log_path = self.out_dir / "run.log"
@@ -137,21 +141,17 @@ class Worker(threading.Thread):
             # Fallback if the installed bookops_worldcat doesn't accept these kwargs
             session = MetadataSession(authorization=token)
 
-            # Try to set timeout on the session if available
-            if hasattr(session, 'request') and hasattr(session.request, 'timeout'):
-                session.request.timeout = self.timeout_s
-
         # Process OCNs
         self._process_ocns(session, records_dir)
-        
+
         # Create output files
         self._create_output_files(records_dir)
-        
+
         self.log("Gereed.")
         self._flush_log(log_path)
 
     def _process_ocns(self, session, records_dir):
-        """Process each OCN and save MARCXML records."""
+        """Iterates through OCNs, fetches MARCXML for each, and saves them to individual files."""
         total = len(self.ocns)
         done = 0
 
@@ -233,7 +233,6 @@ class App(tk.Tk):
         self.csv_path = tk.StringVar()
         self.out_dir = tk.StringVar(value=str(Path.cwd() / f"output/{ts}"))
         self.delay_ms = tk.IntVar(value=0)
-        self.timeout_s = tk.IntVar(value=DEFAULT_TIMEOUT)
 
         self.log_q = queue.Queue()
         self.stop_event = threading.Event()
@@ -283,9 +282,6 @@ class App(tk.Tk):
         ttk.Label(outf, text="Pauze tussen verzoeken (ms, optioneel):").grid(row=1, column=0, sticky="e", **pad)
         ttk.Spinbox(outf, from_=0, to=5000, increment=100, textvariable=self.delay_ms, width=10).grid(row=1, column=1,
                                                                                                       sticky="w", **pad)
-        ttk.Label(outf, text="Timeout per verzoek (s):").grid(row=1, column=2, sticky="e", **pad)
-        ttk.Spinbox(outf, from_=5, to=120, increment=1, textvariable=self.timeout_s, width=10).grid(row=1, column=3,
-                                                                                                    sticky="w", **pad)
         outf.columnconfigure(0, weight=1)
 
         # Controls section
@@ -444,7 +440,6 @@ class App(tk.Tk):
             progress_cb=lambda done, total: self.pb.config(value=done),
             stop_event=self.stop_event,
             delay_ms=self.delay_ms.get(),
-            timeout_s=self.timeout_s.get(),
         )
         self.worker.start()
         self.after(400, self._check_done)

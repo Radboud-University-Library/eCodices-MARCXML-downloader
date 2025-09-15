@@ -83,8 +83,6 @@ Na voltooiing van het proces, worden de volgende bestanden gegenereerd:
 
 - **Scope**: Standaard is de scope ingesteld op `WorldCatMetadataAPI`. Wijzig dit alleen als je specifieke behoeften hebt.
 - **Pauze tussen verzoeken**: Voeg een pauze toe tussen API-verzoeken (in milliseconden) om rate limiting te voorkomen.
-- **Timeout per verzoek**: Stel een timeout-waarde in (in seconden) voor elk API-verzoek. Standaard is dit 15 seconden.
-
 
 ## Problemen oplossen
 
